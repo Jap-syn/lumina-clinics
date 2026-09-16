@@ -15,6 +15,11 @@ RUN composer install --no-dev --no-interaction --no-scripts --prefer-dist --opti
 COPY . .
 RUN composer dump-autoload --optimize
 
+# Git does not always carry the executable bit (and neither do some file-sync
+# tools), and an entrypoint without it fails the deploy with nothing but
+# "permission denied". Set it here so the image cannot be built wrong.
+RUN chmod +x /app/docker-entrypoint.sh
+
 ENV APP_ENV=production
 
 # `php artisan serve` wraps PHP's built-in server, which handles ONE request at
