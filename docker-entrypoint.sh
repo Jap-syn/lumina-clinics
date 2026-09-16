@@ -28,4 +28,11 @@ php artisan migrate --force
 php artisan db:seed --force --class="Database\\Seeders\\DatabaseSeeder" || \
   echo "Seed skipped (data already present)."
 
-exec php artisan serve --host=0.0.0.0 --port="${PORT:-8080}"
+# --no-reload matters twice over. PHP_CLI_SERVER_WORKERS is ignored without it
+# ("Unable to respect the PHP_CLI_SERVER_WORKERS environment variable without
+# the --no-reload flag"), so the race script would be measuring a single-threaded
+# server; and the file watcher it disables has no purpose in an immutable image.
+LISTEN_PORT="${PORT:-8080}"
+echo "Listening on 0.0.0.0:${LISTEN_PORT} (Railway's target port must match this)."
+
+exec php artisan serve --host=0.0.0.0 --port="${LISTEN_PORT}" --no-reload
