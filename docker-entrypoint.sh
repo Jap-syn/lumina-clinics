@@ -1,30 +1,23 @@
 #!/usr/bin/env sh
 set -e
 
-# APP_KEY must exist before anything boots; the consent records are encrypted
-# with it, so on Railway set it once as a variable rather than regenerating.
+# The consent records are encrypted with APP_KEY, so a key that changes on every
+# deploy makes yesterday's ID numbers unreadable. Set it in Railway.
+#
+# If it is missing we generate one in memory with --show. NOT `key:generate`:
+# that writes to .env, which is gitignored and therefore absent from the image,
+# so it dies with "file_get_contents(/app/.env): No such file or directory" and
+# takes the container with it. A missing key should be a loud warning, not a
+# crash loop.
 if [ -z "$APP_KEY" ]; then
-  echo "APP_KEY is not set. Generating an ephemeral one (encrypted consent"
-  echo "records will not survive a redeploy - set APP_KEY in Railway)."
-  php artisan key:generate --force
+  echo "WARNING: APP_KEY is not set. Generating an ephemeral one."
+  echo "WARNING: Encrypted consent records will NOT survive the next deploy."
+  echo "WARNING: Set APP_KEY in the Railway variables to fix this."
+  APP_KEY="$(php artisan key:generate --show)"
+  export APP_KEY
 fi
 
-# Railway's private network is not resolvable the instant the container starts,
-# so a migrate on the first boot can fail with a DNS error and take the deploy
-# with it. Wait for the database rather than racing it.
-echo "Waiting for the database..."
-i=1
-while [ "$i" -le 30 ]; do
-  if php artisan db:monitor >/dev/null 2>&1; then
-    echo "Database is up."
-    break
-  fi
-  if [ "$i" -eq 30 ]; then
-    echo "Database still unreachable after 30 attempts - continuing so the real error is logged."
-  fi
-  i=$((i + 1))
-  sleep 2
-done
+php /app/scripts/wait-for-db.php
 
 # Creates btree_gist and the three exclusion constraints. This is the rule that
 # stops two clients being sold the same 3pm laser slot, so a failure here must
