@@ -1,0 +1,20 @@
+--- a/database/migrations/2026_01_01_000300_add_booking_overlap_constraints.php	2026-09-15 20:26:18.318993889 +0000
++++ b/database/migrations/2026_01_01_000300_add_booking_overlap_constraints.php	2026-09-15 20:35:25.714565963 +0000
+@@ -30,17 +30,6 @@
+         // range. Ships with Postgres as a standard contrib module.
+         DB::statement('CREATE EXTENSION IF NOT EXISTS btree_gist');
+ 
+-        // RULE 1: one client per room at a time, including the 15 minute clean up.
+-        DB::statement(<<<'SQL'
+-            ALTER TABLE bookings
+-            ADD CONSTRAINT bookings_no_room_overlap
+-            EXCLUDE USING gist (
+-                room_id WITH =,
+-                tstzrange(starts_at, room_release_at, '[)') WITH &&
+-            )
+-            WHERE (status IN ('pending_payment', 'confirmed'))
+-        SQL);
+-
+         // RULE 2: a therapist is in one place at a time, plus her own turnaround.
+         // The senior facialist's buffer is 0, so she can go straight into her
+         // next client - in a different room, because rule 1 still holds.

@@ -1,0 +1,33 @@
+--- a/app/Services/Payments/DepositService.php	2026-09-15 20:29:16.583004486 +0000
++++ b/app/Services/Payments/DepositService.php	2026-09-15 20:35:45.519672078 +0000
+@@ -54,15 +54,6 @@
+             ];
+         }
+ 
+-        // 2. Different attempt, booking already paid. Do not charge again.
+-        if ($paid = $booking->successfulPayment()) {
+-            return [
+-                'payment' => $paid,
+-                'booking' => $booking->refresh(),
+-                'replayed' => true,
+-            ];
+-        }
+-
+         if ($booking->status === Booking::CONFIRMED && ! $booking->deposit_required) {
+             // A member's booking. Nothing to pay.
+             return ['payment' => null, 'booking' => $booking, 'replayed' => true];
+--- a/database/migrations/2026_01_01_000400_create_payments_and_consents_tables.php	2026-09-15 20:26:31.914994697 +0000
++++ b/database/migrations/2026_01_01_000400_create_payments_and_consents_tables.php	2026-09-15 20:35:45.519875819 +0000
+@@ -44,12 +44,6 @@
+             $table->timestamps();
+         });
+ 
+-        DB::statement(<<<'SQL'
+-            CREATE UNIQUE INDEX payments_one_success_per_booking
+-                ON payments (booking_id)
+-                WHERE status = 'succeeded'
+-        SQL);
+-
+         /*
+          | Consent records.
+          |
