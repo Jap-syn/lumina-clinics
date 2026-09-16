@@ -28,7 +28,12 @@ flowchart TD
     J --> P2([Client tries another day]) --> F
     P --> Q[Enter name and phone]
 
-    Q --> R{Laser treatment?}
+    Q --> QA[/"Normalise the number to E.164<br/>085-555-5555 → +66855555555"/]
+    QA --> QB{"Number already<br/>on file?"}
+    QB -->|Yes| QC["Same client row —<br/>her membership follows her"]
+    QB -->|No| QD[New client row]
+    QC --> R{Laser treatment?}
+    QD --> R
     R -->|Yes| S["Consent: ID number + date of birth<br/>(encrypted at rest)"]
     R -->|No| T[["POST /api/bookings"]]
     S --> T
@@ -103,8 +108,13 @@ request. It then walks Saturday in half-hour steps, keeping only times where Pim
 is free *and* the laser suite is free for the treatment plus its fifteen minutes
 of cleaning.
 
-She picks 3pm. Because it is a laser treatment, she signs the consent and gives
-her ID number, which is encrypted before it is stored.
+She picks 3pm. She types her number with dashes, the way she always writes it.
+It is normalised before it is matched, so she is recognised as the same Nok who
+came in March rather than becoming a second record with the same name - which
+matters, because whether a deposit is due is decided by the record she lands on.
+
+Because it is a laser treatment, she signs the consent and gives her ID number,
+which is encrypted before it is stored.
 
 Her booking goes in. At the same moment, a receptionist at the desk is entering
 a phone booking for the same laser suite at 3pm. Both were looking at a free
