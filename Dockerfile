@@ -1,5 +1,11 @@
 # Railway builds this directly. It runs the code as submitted, unchanged.
-FROM php:8.3-cli
+#
+# 8.4, not 8.3. composer.lock resolves to Symfony 8.1, and five of its packages
+# (string, clock, translation, event-dispatcher, css-selector) require
+# php >= 8.4.1. composer.json still says ^8.2, but the LOCK is what gets
+# installed - so on 8.3 this fails at `composer install`, long before runtime.
+# If you change this line, check `composer check-platform-reqs` first.
+FROM php:8.4-cli
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq-dev libzip-dev unzip git \
