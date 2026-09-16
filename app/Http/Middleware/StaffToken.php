@@ -44,7 +44,11 @@ class StaffToken
             return $next($request);
         }
 
-        if ($request->expectsJson()) {
+        // An /api/* route always answers as an API, whatever the caller asked
+        // for. `expectsJson()` alone is not enough: a plain `curl /api/staff/diary`
+        // sends no Accept header, so it would be handed the HTML login page from
+        // a JSON endpoint - confusing to a human and useless to a script.
+        if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json(['error' => 'Staff authentication required.'], 401);
         }
 

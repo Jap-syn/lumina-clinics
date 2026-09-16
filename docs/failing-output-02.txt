@@ -1,0 +1,28 @@
+$ git apply docs/patches/02-remove-double-payment-guard.patch
+$ php artisan test --filter=test_two_different_keys_on_one_booking_still_charge_once
+
+
+   FAIL  Tests\Feature\DepositAndCancellationTest
+  ⨯ two different keys on one booking still charge once                  0.32s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\DepositAndCancellationTest…   PaymentFailedException   
+  This booking is no longer awaiting payment (status: confirmed).
+
+  at app/Services/Payments/DepositService.php:63
+     59▕             return ['payment' => null, 'booking' => $booking, 'replayed' => true];
+     60▕         }
+     61▕ 
+     62▕         if ($booking->status !== Booking::PENDING_PAYMENT) {
+  ➜  63▕             throw new PaymentFailedException(
+     64▕                 'This booking is no longer awaiting payment (status: '.$booking->status.').'
+     65▕             );
+     66▕         }
+     67▕
+
+  1   app/Services/Payments/DepositService.php:63
+  2   tests/Feature/DepositAndCancellationTest.php:108
+
+
+  Tests:    1 failed (0 assertions)
+  Duration: 0.36s
+

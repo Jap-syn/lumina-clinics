@@ -77,6 +77,16 @@ class StaffAreaTest extends TestCase
             ->assertOk();
     }
 
+    /** An API route answers as an API even when the caller sends no Accept header. */
+    public function test_the_api_refuses_in_json_even_without_an_accept_header(): void
+    {
+        $this->seedClinic();
+
+        $this->get('/api/staff/diary?branch_id='.Branch::first()->id.'&date=2026-10-01')
+            ->assertStatus(401)
+            ->assertJsonPath('error', 'Staff authentication required.');
+    }
+
     public function test_a_branch_can_be_created_edited_and_deactivated_but_never_deleted(): void
     {
         $this->seedClinic();

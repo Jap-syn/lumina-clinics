@@ -1,0 +1,30 @@
+$ git apply docs/patches/01-remove-room-overlap-constraint.patch
+$ php artisan test --filter=DoubleBookingTest
+
+
+   FAIL  Tests\Feature\DoubleBookingTest
+  ⨯ two simultaneous connections cannot book the same room               0.39s  
+  ✓ twenty parallel processes produce exactly one booking                0.67s  
+  ✓ cancelling releases the slot for someone else                        0.30s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\DoubleBookingTest > two simultaneous connections ca…   
+  The second booking should have been refused by the database.
+Failed asserting that false is true.
+
+  at tests/Feature/DoubleBookingTest.php:115
+    111▕             $second->rollBack();
+    112▕             $this->assertStringContainsString('bookings_no_room_overlap', $e->getMessage());
+    113▕         }
+    114▕ 
+  ➜ 115▕         $this->assertTrue($rejected, 'The second booking should have been refused by the database.');
+    116▕         $this->assertSame(1, Booking::where('room_id', $room->id)->blocking()->count());
+    117▕     }
+    118▕ 
+    119▕     /**
+
+  1   tests/Feature/DoubleBookingTest.php:115
+
+
+  Tests:    1 failed, 2 passed (6 assertions)
+  Duration: 1.40s
+

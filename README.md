@@ -1,6 +1,6 @@
 # Lumina Clinics — online booking (phase one)
 
-A booking system for a six-branch aesthetics clinic. Laravel 12, PHP 8.3,
+A booking system for a six-branch aesthetics clinic. Laravel 12, PHP 8.4,
 Postgres. No booking SaaS behind it: the availability logic, the API and the
 storage are all here.
 
@@ -8,7 +8,7 @@ storage are all here.
 - **Technical notes** — [`docs/technical-notes.md`](docs/technical-notes.md)
 - **Flowchart** — [`docs/flowchart.md`](docs/flowchart.md)
 
-**Live:** `<!-- TODO: paste your Railway URL -->`
+**Live:** <https://lumina-clinics-production.up.railway.app>  ·  reception token `lumina-reception`
 Client booking page at `/`, reception diary at `/diary`
 (staff token: `lumina-reception`).
 
@@ -34,7 +34,13 @@ ordinary application logic and lives in the services.
 
 ## Run it
 
-Needs PHP 8.3+, Composer, and Postgres 14+ running locally.
+Needs PHP 8.4+, Composer, and Postgres 14+ running locally.
+
+PHP 8.4 specifically, not 8.2 or 8.3. `composer.json` allows `^8.2`, but the
+resolved `composer.lock` pulls Symfony 8.1, and five of its packages
+(`string`, `clock`, `translation`, `event-dispatcher`, `css-selector`) require
+`php >= 8.4.1`. The lock is what gets installed, so on 8.3 `composer install`
+fails outright. The Dockerfile pins `php:8.4-cli` for the same reason.
 
 ```bash
 git clone <this repo> && cd lumina
@@ -173,15 +179,52 @@ enough, and removing the constraint proves it.
          // next client - in a different room, because rule 1 still holds.
 ```
 
-**The failing output:**
+**The failing output** (captured by the script, verbatim):
 
 ```text
-<!-- TODO: run ./scripts/prove-failure.sh 01 and paste docs/failing-output-01.txt here -->
+$ git apply docs/patches/01-remove-room-overlap-constraint.patch
+$ php artisan test --filter=DoubleBookingTest
+
+
+   FAIL  Tests\Feature\DoubleBookingTest
+  ⨯ two simultaneous connections cannot book the same room               0.39s  
+  ✓ twenty parallel processes produce exactly one booking                0.67s  
+  ✓ cancelling releases the slot for someone else                        0.30s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\DoubleBookingTest > two simultaneous connections ca…   
+  The second booking should have been refused by the database.
+Failed asserting that false is true.
+
+  at tests/Feature/DoubleBookingTest.php:115
+    111▕             $second->rollBack();
+    112▕             $this->assertStringContainsString('bookings_no_room_overlap', $e->getMessage());
+    113▕         }
+    114▕ 
+  ➜ 115▕         $this->assertTrue($rejected, 'The second booking should have been refused by the database.');
+    116▕         $this->assertSame(1, Booking::where('room_id', $room->id)->blocking()->count());
+    117▕     }
+    118▕ 
+    119▕     /**
+
+  1   tests/Feature/DoubleBookingTest.php:115
+
+
+  Tests:    1 failed, 2 passed (6 assertions)
+  Duration: 1.40s
 ```
 
-Three tests fail: the two-connection test, the twenty-parallel-process test, and
-the room cleanup test. All twenty forked processes pass their own availability
-check, because they all read before any of them writes.
+Exactly one test fails, and it is the right one. Two transactions are open at
+once, each has checked availability, and each has been told the room is free.
+With the constraint gone, both writes succeed and two clients are sold the same
+room. That is last Christmas, reproduced in 0.39 seconds.
+
+**What does not fail is worth as much.** The twenty-process race still passes,
+because the *therapist* exclusion constraint is a separate guard and catches the
+duplicates on its own. Two independent rules, each sufficient here - which is
+exactly why removing one has to be tested deliberately rather than assumed to
+break everything. The availability code in PHP is untouched throughout, and it
+never notices a thing: it read before anyone wrote, which is the whole reason the
+rule cannot live there.
 
 ### 2. The double payment rule
 
@@ -227,11 +270,44 @@ keys — two browser tabs — then charge the client twice.
           |
 ```
 
-**The failing output:**
+**The failing output** (captured by the script, verbatim):
 
 ```text
-<!-- TODO: run ./scripts/prove-failure.sh 02 and paste docs/failing-output-02.txt here -->
+$ git apply docs/patches/02-remove-double-payment-guard.patch
+$ php artisan test --filter=test_two_different_keys_on_one_booking_still_charge_once
+
+
+   FAIL  Tests\Feature\DepositAndCancellationTest
+  ⨯ two different keys on one booking still charge once                  0.32s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\DepositAndCancellationTest…   PaymentFailedException   
+  This booking is no longer awaiting payment (status: confirmed).
+
+  at app/Services/Payments/DepositService.php:63
+     59▕             return ['payment' => null, 'booking' => $booking, 'replayed' => true];
+     60▕         }
+     61▕ 
+     62▕         if ($booking->status !== Booking::PENDING_PAYMENT) {
+  ➜  63▕             throw new PaymentFailedException(
+     64▕                 'This booking is no longer awaiting payment (status: '.$booking->status.').'
+     65▕             );
+     66▕         }
+     67▕
+
+  1   app/Services/Payments/DepositService.php:63
+  2   tests/Feature/DepositAndCancellationTest.php:108
+
+
+  Tests:    1 failed (0 assertions)
+  Duration: 0.36s
 ```
+
+The second request, with a different idempotency key, is no longer stopped by
+the "has this booking already been paid" check - it gets as far as the status
+guard and dies there. Without either, it would have charged the client twice and
+left the receptionist refunding by hand, which is the thing the founder actually
+complained about.
+
 
 Worth noting what this patch does *not* break: the same-key retry test still
 passes, because the idempotency key index catches it. The two guards are
